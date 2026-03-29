@@ -1080,5 +1080,19 @@ window.addEventListener('resize', () => { resizeCanvas(); initCity(); });
 
 (function loop() { drawCity(); requestAnimationFrame(loop); })();
 </script>
+ <script>
+document.addEventListener('click', () => {
+  try {
+    if (typeof initSound === "function") {
+      initSound();
+    }
+    if (typeof audioCtx !== "undefined" && audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+  } catch (e) {
+    console.log("Audio init error:", e);
+  }
+}, { once: true });
+</script>
 </body>
 </html>
