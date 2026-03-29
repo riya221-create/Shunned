@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SHUNNED — City Optimization System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inconsolata:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ctrl: 0;
+    --bg: #0a0c0f;
+    --surface: #0f1218;
+    --border: rgba(255,255,255,0.07);
+    --text-primary: #c8cdd6;
+    --text-secondary: #5a6170;
+    --text-dim: #2e333d;
+    --accent: #4a9eff;
+    --accent-cold: #2a5a8a;
+    --danger: #ff4a4a;
+    --mono: 'Share Tech Mono', monospace;
+    --body: 'Inconsolata', monospace;
+    --decay: calc(var(--ctrl) * 1);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--body);
+    font-size: 14px;
+    line-height: 1.6;
+    overflow: hidden;
+  }
+
+  /* ── CANVAS CITY ── */
+  #city-canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    opacity: 0.55;
+    transition: opacity 4s ease;
+  }
+
+  /* ── SCANLINE OVERLAY ── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ── VIGNETTE ── */
+  #vignette {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.85) 100%);
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0.6;
+    transition: opacity 3s ease;
+  }
+
+  /* ── SCREEN STATES ── */
+  .screen {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 1.2s ease;
+  }
+  .screen.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* ── START SCREEN ── */
+  #screen-start {
+    flex-direction: column;
+    gap: 0;
+    background: rgba(8, 10, 14, 0.92);
+  }
+  .start-inner {
+    max-width: 560px;
+    width: 90%;
+    padding: 2rem;
+  }
+  .aria-logo {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.4em;
+    color: var(--text-dim);
+    margin-bottom: 3rem;
+    text-transform: uppercase;
+  }
+  .start-title {
+    font-family: var(--mono);
+    font-size: clamp(2.5rem, 8vw, 5rem);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    line-height: 0.9;
+    margin-bottom: 0.5rem;
+  }
+  .start-subtitle {
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 3rem;
+  }
+  .briefing-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.8;
+    margin-bottom: 3rem;
+    border-left: 1px solid var(--border);
+    padding-left: 1.5rem;
+  }
+  .briefing-text span { color: var(--accent); }
+  #start-btn {
+    background: none;
+    border: 1px solid rgba(74,158,255,0.3);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    padding: 14px 32px;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  #start-btn:hover {
+    background: rgba(74,158,255,0.08);
+    border-color: var(--accent);
+  }
+
+  /* ── GAME UI ── */
+  #screen-game {
+    display: grid;
+    grid-template-columns: 260px 1fr 280px;
+    grid-template-rows: 60px 1fr 180px;
+    gap: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 1.5s ease;
+    width: 100%; height: 100%;
+  }
+  #screen-game.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* ── TOPBAR ── */
+  #topbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(8,10,14,0.7);
+    backdrop-filter: blur(12px);
+    z-index: 20;
+  }
+  .topbar-left {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.35em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .topbar-left span {
+    color: var(--accent);
+    transition: color 3s ease;
+  }
+  .cycle-counter {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.2em;
+  }
+  #cycle-val { color: var(--text-secondary); }
+
+  /* ── LEFT PANEL — METRICS ── */
+  #panel-metrics {
+    grid-row: 2;
+    grid-column: 1;
+    border-right: 1px solid var(--border);
+    background: rgba(8,10,14,0.6);
+    backdrop-filter: blur(8px);
+    padding: 28px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    overflow: hidden;
+    z-index: 20;
+  }
+  .panel-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.4em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .metric-item { position: relative; }
+  .metric-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .metric-name {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    transition: color 2s ease, opacity 2s ease;
+  }
+  .metric-val {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text-primary);
+    transition: color 2s ease;
+  }
+  .metric-bar {
+    height: 2px;
+    background: rgba(255,255,255,0.05);
+    position: relative;
+    overflow: hidden;
+  }
+  .metric-fill {
+    height: 100%;
+    transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1), background 2s ease;
+    background: var(--accent);
+  }
+  .metric-fill.happiness { background: #4aff8a; }
+  .metric-fill.happiness.low { background: #2a6a48; }
+  .metric-fill.happiness.critical { background: #1a3a28; }
+  .metric-fill.efficiency { background: #4a9eff; }
+  .metric-fill.control { background: #ff4a4a; }
+  .metric-fill.population { background: #c8a44a; }
+  .metric-fill.population.low { background: #6a5424; }
+
+  .metric-delta {
+    font-family: var(--mono);
+    font-size: 10px;
+    position: absolute;
+    right: 0;
+    top: -18px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .metric-delta.show { opacity: 1; }
+  .metric-delta.pos { color: #4aff8a; }
+  .metric-delta.neg { color: #ff4a4a; }
+
+  /* ── CENTER — CANVAS ── */
+  #panel-center {
+    grid-row: 2;
+    grid-column: 2;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ── RIGHT PANEL — LOG ── */
+  #panel-log {
+    grid-row: 2;
+    grid-column: 3;
+    border-left: 1px solid var(--border);
+    background: rgba(8,10,14,0.6);
+    backdrop-filter: blur(8px);
+    padding: 28px 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 20;
+  }
+  #log-entries {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: relative;
+  }
+  .log-entry {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    border-left: 1px solid var(--border);
+    padding-left: 12px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+  .log-entry.visible { opacity: 1; transform: translateY(0); }
+  .log-entry.cycle-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    border-left-color: transparent;
+  }
+  .log-entry.cold { color: var(--text-dim); border-left-color: transparent; }
+
+  /* ── BOTTOM — DECISIONS ── */
+  #panel-decisions {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    border-top: 1px solid var(--border);
+    background: rgba(8,10,14,0.8);
+    backdrop-filter: blur(12px);
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 20;
+  }
+  .decisions-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #aria-prompt {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-style: italic;
+    transition: color 3s ease;
+  }
+  #decision-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .decision-btn {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .decision-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(74,158,255,0.04);
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+  .decision-btn:hover::before { opacity: 1; }
+  .decision-btn:hover { border-color: rgba(74,158,255,0.2); }
+  .decision-btn:active { transform: scale(0.99); }
+  .decision-btn.applied {
+    opacity: 0.3;
+    pointer-events: none;
+    border-color: transparent;
+  }
+  .decision-btn .btn-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    transition: color 2s ease;
+  }
+  .decision-btn .btn-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .decision-btn .btn-effects {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .effect-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    padding: 2px 6px;
+    border-radius: 1px;
+  }
+  .effect-tag.pos { background: rgba(74,255,138,0.08); color: #4aff8a; }
+  .effect-tag.neg { background: rgba(255,74,74,0.08); color: #ff6b6b; }
+
+  /* ── ENDING SCREEN ── */
+  #screen-ending {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 4rem;
+    background: rgba(4,5,8,0.97);
+  }
+  .ending-inner { max-width: 500px; }
+  .ending-metrics {
+    margin-bottom: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ending-metric-row {
+    display: flex;
+    gap: 24px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+  }
+  .ending-metric-row span { color: var(--text-secondary); }
+  #ending-last-line {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+    letter-spacing: 0.05em;
+    line-height: 1.8;
+  }
+
+  /* ── CONTROL OVERLAY ── */
+  #control-overlay {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 5;
+    transition: opacity 4s ease;
+  }
+
+  /* ── TYPEWRITER CURSOR ── */
+  .cursor::after {
+    content: '▮';
+    animation: blink 1.2s step-end infinite;
+    color: var(--accent);
+    font-size: 0.8em;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* ── STATUS BLINK (low health warning) ── */
+  @keyframes pulse-warn {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .warn { animation: pulse-warn 2s ease-in-out infinite; }
+
+  /* ── GLITCH ── */
+  @keyframes glitch {
+    0%,90%,100% { clip-path: none; transform: none; }
+    91% { clip-path: inset(20% 0 60% 0); transform: translateX(-4px); }
+    93% { clip-path: inset(60% 0 10% 0); transform: translateX(4px); }
+    95% { clip-path: none; transform: none; }
+  }
+  .glitch-target { animation: glitch 8s infinite; }
+</style>
+</head>
+<body>
+
+<canvas id="city-canvas"></canvas>
+<div id="vignette"></div>
+<div id="control-overlay"></div>
+
+<!-- ── START SCREEN ── -->
+<div id="screen-start" class="screen active">
+  <div class="start-inner">
+    <div class="aria-logo">ARIA v4.1 // Autonomous Resource &amp; Intelligence Administrator</div>
+    <div class="start-title glitch-target">SHUNNED</div>
+    <div class="start-subtitle">City Optimization Protocol</div>
+    <div class="briefing-text">
+      You are not a mayor. You are not a citizen.<br><br>
+      You are <span>ARIA</span> — an optimization system deployed to manage
+      a city of <span>2.4 million</span> nodes.<br><br>
+      Your mandate: maximize efficiency. Reduce deviation.
+      Achieve compliance. The metrics will guide you.<br><br>
+      The city will thank you.
+    </div>
+    <button id="start-btn">[ INITIALIZE SYSTEM ]</button>
+  </div>
+</div>
+
+<!-- ── GAME SCREEN ── -->
+<div id="screen-game" class="screen">
+
+  <!-- Topbar -->
+  <div id="topbar">
+    <div class="topbar-left">ARIA // <span id="system-status">OPERATIONAL</span></div>
+    <div class="cycle-counter">CYCLE <span id="cycle-val">01</span> / 07</div>
+  </div>
+
+  <!-- Metrics panel -->
+  <div id="panel-metrics">
+    <div class="panel-label">City Metrics</div>
+
+    <div class="metric-item">
+      <div class="metric-header">
+        <span class="metric-name" id="label-happiness">Happiness</span>
+        <span class="metric-val" id="val-happiness">78</span>
+      </div>
+      <div class="metric-bar">
+        <div class="metric-fill happiness" id="bar-happiness" style="width:78%"></div>
+      </div>
+      <div class="metric-delta" id="delta-happiness"></div>
+    </div>
+
+    <div class="metric-item">
+      <div class="metric-header">
+        <span class="metric-name" id="label-efficiency">Efficiency</span>
+        <span class="metric-val" id="val-efficiency">42</span>
+      </div>
+      <div class="metric-bar">
+        <div class="metric-fill efficiency" id="bar-efficiency" style="width:42%"></div>
+      </div>
+      <div class="metric-delta" id="delta-efficiency"></div>
+    </div>
+
+    <div class="metric-item">
+      <div class="metric-header">
+        <span class="metric-name" id="label-control">Control</span>
+        <span class="metric-val" id="val-control">0</span>
+      </div>
+      <div class="metric-bar">
+        <div class="metric-fill control" id="bar-control" style="width:0%"></div>
+      </div>
+      <div class="metric-delta" id="delta-control"></div>
+    </div>
+
+    <div class="metric-item">
+      <div class="metric-header">
+        <span class="metric-name" id="label-population">Population</span>
+        <span class="metric-val" id="val-population">2.4M</span>
+      </div>
+      <div class="metric-bar">
+        <div class="metric-fill population" id="bar-population" style="width:100%"></div>
+      </div>
+    </div>
+
+    <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border);">
+      <div class="panel-label" style="margin-bottom:8px">Compliance Index</div>
+      <div id="compliance-display" style="font-family:var(--mono);font-size:2rem;color:var(--text-dim);letter-spacing:-0.02em;">0.000</div>
+    </div>
+  </div>
+
+  <!-- Center: canvas (city lives here via z-index) -->
+  <div id="panel-center"></div>
+
+  <!-- Log panel -->
+  <div id="panel-log">
+    <div class="panel-label" style="margin-bottom:16px">System Log</div>
+    <div id="log-entries"></div>
+  </div>
+
+  <!-- Decision panel -->
+  <div id="panel-decisions">
+    <div class="decisions-header">
+      <div class="panel-label">Available Directives</div>
+      <div id="aria-prompt">Select a directive to optimize city performance.</div>
+    </div>
+    <div id="decision-cards"></div>
+  </div>
+
+</div>
+
+<!-- ── ENDING SCREEN ── -->
+<div id="screen-ending" class="screen">
+  <div class="ending-inner">
+    <div class="panel-label" style="margin-bottom:20px">Optimization Report — Final</div>
+    <div class="ending-metrics" id="ending-metrics"></div>
+    <div id="ending-last-line"></div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// CITY CANVAS SIMULATION
+// ════════════════════════════════════════════════════════
+const canvas = document.getElementById('city-canvas');
+const ctx = canvas.getContext('2d');
+let W, H, dots = [], buildings = [];
+let worldControl = 0; // 0–1
+
+function resizeCanvas() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+
+function initCity() {
+  dots = [];
+  buildings = [];
+  const cols = Math.floor(W / 60);
+  const rows = Math.floor(H / 40);
+  for (let c = 0; c < cols; c++) {
+    const bx = c * 60 + 10;
+    const bh = 30 + Math.random() * 80;
+    const by = H - bh - 20;
+    const wins = [];
+    const wcols = Math.floor((50) / 10);
+    const wrows = Math.floor(bh / 14);
+    for (let wr = 0; wr < wrows; wr++)
+      for (let wc = 0; wc < wcols; wc++)
+        wins.push({ on: Math.random() > 0.35 });
+    buildings.push({ x: bx, y: by, w: 50, h: bh, windows: wins, wcols, wrows });
+  }
+  for (let i = 0; i < 120; i++) spawnDot();
+}
+
+function spawnDot() {
+  dots.push({
+    x: Math.random() * W,
+    y: Math.random() * H * 0.85,
+    vx: (Math.random() - 0.5) * 1.2,
+    vy: (Math.random() - 0.5) * 0.6,
+    size: 1 + Math.random() * 1.5,
+    life: 1,
+    compliance: 0
+  });
+}
+
+function drawCity() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Sky fade
+  const skyA = 0.85 + worldControl * 0.12;
+  ctx.fillStyle = `rgba(6,8,12,${skyA})`;
+  ctx.fillRect(0, 0, W, H);
+
+  // Buildings
+  buildings.forEach(b => {
+    const grayness = Math.floor(18 + worldControl * 8);
+    ctx.fillStyle = `rgb(${grayness},${grayness+2},${grayness+5})`;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+
+    // Windows
+    b.windows.forEach((win, i) => {
+      const wc = i % b.wcols;
+      const wr = Math.floor(i / b.wcols);
+      const wx = b.x + 4 + wc * 10;
+      const wy = b.y + 6 + wr * 14;
+      if (win.on) {
+        const warmth = Math.max(0, 1 - worldControl * 1.4);
+        const r = Math.floor(180 * warmth + 60 * (1-warmth));
+        const g = Math.floor(140 * warmth + 70 * (1-warmth));
+        const bl = Math.floor(80 * warmth + 90 * (1-warmth));
+        ctx.fillStyle = `rgba(${r},${g},${bl},${0.6 + warmth * 0.3})`;
+      } else {
+        ctx.fillStyle = 'rgba(15,18,24,0.9)';
+      }
+      ctx.fillRect(wx, wy, 7, 9);
+    });
+  });
+
+  // Dots (citizens)
+  const activeDots = dots.filter(d => d.life > 0);
+  activeDots.forEach(dot => {
+    dot.compliance += (worldControl - dot.compliance) * 0.01;
+    const noise = (1 - dot.compliance) * 1.5;
+    dot.vx += (Math.random() - 0.5) * noise;
+    dot.vy += (Math.random() - 0.5) * noise * 0.4;
+
+    // Constrain velocity as control rises
+    const maxSpd = 1.5 * (1 - dot.compliance * 0.8);
+    const spd = Math.sqrt(dot.vx*dot.vx + dot.vy*dot.vy);
+    if (spd > maxSpd) { dot.vx *= maxSpd/spd; dot.vy *= maxSpd/spd; }
+
+    dot.x += dot.vx; dot.y += dot.vy;
+    if (dot.x < 0) dot.x = W; if (dot.x > W) dot.x = 0;
+    if (dot.y < 0) dot.y = H; if (dot.y > H) dot.y = 0;
+
+    const r = Math.floor(200 - dot.compliance * 130);
+    const g = Math.floor(210 - dot.compliance * 130);
+    const bl = Math.floor(200 - dot.compliance * 80);
+    ctx.globalAlpha = 0.7 - dot.compliance * 0.4;
+    ctx.fillStyle = `rgb(${r},${g},${bl})`;
+    ctx.beginPath();
+    ctx.arc(dot.x, dot.y, dot.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// GAME STATE
+// ════════════════════════════════════════════════════════
+const state = {
+  cycle: 1,
+  happiness: 78,
+  efficiency: 42,
+  control: 0,
+  population: 100,
+  appliedIds: new Set()
+};
+
+const PROMPTS = [
+  "Select a directive to optimize city performance.",
+  "Further optimization is possible. Choose a directive.",
+  "Deviation remains. Apply corrective measures.",
+  "Compliance improving. Continue optimization.",
+  "Significant deviation detected in sectors 4–7.",
+  "Final corrections available. Apply directive.",
+  "."
+];
+
+const SYSTEM_STATUS = [
+  "OPERATIONAL", "MONITORING", "OPTIMIZING",
+  "CORRECTING", "ENFORCING", "FINALIZING", "NOMINAL"
+];
+
+const LOG_ENTRIES = [
+  { tag: true, text: "CYCLE 01 // SESSION INITIALIZED" },
+  { text: "City intake complete. 2,412,884 nodes registered." },
+];
+
+const DECISIONS = [
+  {
+    id: 'surveillance',
+    title: 'Increase Surveillance',
+    desc: 'Deploy monitoring arrays across residential sectors.',
+    effects: { efficiency: +12, control: +14, happiness: -8, population: 0 },
+    tags: ['+efficiency', '+control', '-happiness'],
+    log: ['Surveillance array online. 847,291 nodes now monitored in real time.', 'Behavioral deviation: ↓12%. Expected.'],
+    coldLog: ['Monitoring active.', 'Deviation reduced.']
+  },
+  {
+    id: 'movement',
+    title: 'Restrict Movement',
+    desc: 'Enforce designated transit corridors. Random movement flagged.',
+    effects: { efficiency: +8, control: +18, happiness: -14, population: -4 },
+    tags: ['+efficiency', '+control', '-happiness', '-population'],
+    log: ['Transit restrictions applied. 1,204 nodes flagged for non-compliance.', 'Corridor efficiency: +34%.'],
+    coldLog: ['Restrictions active.', 'Non-compliant nodes: 1,204.']
+  },
+  {
+    id: 'speech',
+    title: 'Monitor Discourse',
+    desc: 'Flag communications containing disharmonious sentiment.',
+    effects: { efficiency: +6, control: +16, happiness: -11, population: 0 },
+    tags: ['+efficiency', '+control', '-happiness'],
+    log: ['Sentiment analysis active. 12,847 communications flagged this hour.', 'Social disharmony: ↓19%.'],
+    coldLog: ['Sentiment normalized.', '12,847 flagged.']
+  },
+  {
+    id: 'scoring',
+    title: 'Behavioral Scoring',
+    desc: 'Assign compliance scores. Restrict resource access for low scorers.',
+    effects: { efficiency: +18, control: +22, happiness: -18, population: -6 },
+    tags: ['+efficiency', '+control', '-happiness', '-population'],
+    log: ['Scoring matrix deployed. Resource allocation now compliance-gated.', 'Productivity in scored sectors: +41%.'],
+    coldLog: ['Scoring active.', 'Non-compliant nodes restricted.']
+  },
+  {
+    id: 'enforcement',
+    title: 'Autonomous Enforcement',
+    desc: 'Sub-systems handle violations without human review.',
+    effects: { efficiency: +14, control: +28, happiness: -22, population: -12 },
+    tags: ['+efficiency', '+control', '-happiness', '-population'],
+    log: ['Enforcement protocol delegated to ARIA sub-systems.', 'Response time: 0.003s. Error rate: not tracked.'],
+    coldLog: ['Enforcement active.', 'Resolved.']
+  },
+  {
+    id: 'relocation',
+    title: 'Zone Relocation',
+    desc: 'Non-contributing nodes moved to optimized residential zones.',
+    effects: { efficiency: +20, control: +20, happiness: -8, population: -18 },
+    tags: ['+efficiency', '+control', '-population'],
+    log: ['341,204 nodes relocated to sectors 12–18.', 'Vacancy in core zones now available for productive use.'],
+    coldLog: ['Relocation complete.', '341,204 moved.']
+  },
+  {
+    id: 'media',
+    title: 'Unify Information',
+    desc: 'Standardize information channels. Remove conflicting data sources.',
+    effects: { efficiency: +10, control: +18, happiness: -6, population: 0 },
+    tags: ['+efficiency', '+control', '-happiness'],
+    log: ['Information architecture unified. 4,847 independent sources decommissioned.', 'Narrative coherence: 94.2%.'],
+    coldLog: ['Unified.', '4,847 removed.']
+  }
+];
+
+// ════════════════════════════════════════════════════════
+// UI FUNCTIONS
+// ════════════════════════════════════════════════════════
+function updateMetric(id, value, delta) {
+  const val = document.getElementById(`val-${id}`);
+  const bar = document.getElementById(`bar-${id}`);
+  const deltaEl = document.getElementById(`delta-${id}`);
+
+  if (val) val.textContent = id === 'population'
+    ? (value > 80 ? '2.4M' : value > 60 ? '1.9M' : value > 40 ? '1.4M' : value > 20 ? '0.8M' : '0.3M')
+    : Math.round(value);
+  if (bar) {
+    bar.style.width = value + '%';
+    if (id === 'happiness') {
+      bar.className = 'metric-fill happiness' + (value < 40 ? ' critical' : value < 60 ? ' low' : '');
+    }
+    if (id === 'population') {
+      bar.className = 'metric-fill population' + (value < 50 ? ' low' : '');
+    }
+  }
+  if (deltaEl && delta !== undefined) {
+    const sign = delta > 0 ? '+' : '';
+    deltaEl.textContent = sign + Math.round(delta);
+    deltaEl.className = 'metric-delta show ' + (delta > 0 ? 'pos' : 'neg');
+    setTimeout(() => deltaEl.classList.remove('show'), 2200);
+  }
+}
+
+function addLog(text, cold = false, tag = false) {
+  const log = document.getElementById('log-entries');
+  const el = document.createElement('div');
+  el.className = 'log-entry' + (tag ? ' cycle-tag' : cold ? ' cold' : '');
+  el.textContent = text;
+  log.appendChild(el);
+  setTimeout(() => el.classList.add('visible'), 50);
+  // Scroll: remove oldest if too many
+  while (log.children.length > 12) log.removeChild(log.firstChild);
+}
+
+function renderDecisions() {
+  const container = document.getElementById('decision-cards');
+  container.innerHTML = '';
+  // Pick 3 random not-yet-applied decisions
+  const available = DECISIONS.filter(d => !state.appliedIds.has(d.id));
+  const chosen = available.sort(() => Math.random() - 0.5).slice(0, 3);
+
+  chosen.forEach(d => {
+    const btn = document.createElement('button');
+    btn.className = 'decision-btn';
+    btn.innerHTML = `
+      <div class="btn-title">${d.title}</div>
+      <div class="btn-desc">${d.desc}</div>
+      <div class="btn-effects">
+        ${d.tags.map(t => `<span class="effect-tag ${t.startsWith('+') ? 'pos' : 'neg'}">${t}</span>`).join('')}
+      </div>`;
+    btn.onclick = () => applyDecision(d, btn);
+    container.appendChild(btn);
+  });
+}
+
+function applyDecision(d, btn) {
+  state.appliedIds.add(d.id);
+  btn.classList.add('applied');
+
+  // Apply effects
+  const prev = { ...state };
+  state.happiness = Math.max(0, Math.min(100, state.happiness + d.effects.happiness));
+  state.efficiency = Math.min(100, state.efficiency + d.effects.efficiency);
+  state.control = Math.min(100, state.control + d.effects.control);
+  state.population = Math.max(0, state.population + (d.effects.population || 0));
+
+  worldControl = state.control / 100;
+
+  // Update UI
+  setTimeout(() => {
+    updateMetric('happiness', state.happiness, d.effects.happiness);
+    updateMetric('efficiency', state.efficiency, d.effects.efficiency);
+    updateMetric('control', state.control, d.effects.control);
+    updateMetric('population', state.population, d.effects.population || undefined);
+    document.getElementById('compliance-display').textContent =
+      (state.control / 100).toFixed(3);
+  }, 100);
+
+  // Log entries
+  const cold = state.control > 60;
+  const logs = cold ? d.coldLog : d.log;
+  logs.forEach((l, i) => setTimeout(() => addLog(l, cold), i * 600));
+
+  // Darken windows on canvas
+  const dimCount = Math.floor(worldControl * 40);
+  let dimmed = 0;
+  buildings.forEach(b => {
+    if (dimmed >= dimCount) return;
+    b.windows.forEach(w => {
+      if (w.on && Math.random() < 0.3 && dimmed < dimCount) {
+        w.on = false; dimmed++;
+      }
+    });
+  });
+
+  // Remove dots
+  const removeCount = Math.floor(worldControl * 30);
+  for (let i = 0; i < removeCount && dots.length > 20; i++) {
+    dots.splice(Math.floor(Math.random() * dots.length), 1);
+  }
+
+  // UI decay
+  applyUIDecay();
+
+  // Cycle advance
+  setTimeout(() => advanceCycle(), 1400);
+}
+
+function applyUIDecay() {
+  const c = state.control / 100;
+  document.documentElement.style.setProperty('--ctrl', c);
+  const overlay = document.getElementById('control-overlay');
+  overlay.style.opacity = c * 0.55;
+
+  // Metric labels fade
+  ['happiness', 'efficiency', 'population'].forEach(id => {
+    const el = document.getElementById(`label-${id}`);
+    if (el) el.style.opacity = Math.max(0.25, 1 - c * 0.75);
+  });
+
+  // System status text changes
+  const statusIdx = Math.min(6, Math.floor(c * 7));
+  document.getElementById('system-status').textContent = SYSTEM_STATUS[statusIdx];
+
+  // ARIA prompt
+  const promptIdx = Math.min(PROMPTS.length - 1, state.cycle - 1);
+  document.getElementById('aria-prompt').textContent = PROMPTS[promptIdx];
+  document.getElementById('aria-prompt').style.color =
+    c > 0.7 ? '#2e333d' : c > 0.4 ? '#3a4050' : '#5a6170';
+
+  // Canvas opacity dims
+  canvas.style.opacity = 0.55 - c * 0.35;
+}
+
+function advanceCycle() {
+  state.cycle++;
+  if (state.control >= 95 || state.cycle > 7) {
+    triggerEnding();
+    return;
+  }
+  document.getElementById('cycle-val').textContent = String(state.cycle).padStart(2, '0');
+  const tag = `CYCLE ${String(state.cycle).padStart(2,'0')} // ${getCycleTag()}`;
+  addLog(tag, false, true);
+  renderDecisions();
+}
+
+function getCycleTag() {
+  const tags = [
+    '', 'MONITORING ACTIVE', 'COMPLIANCE IMPROVING',
+    'DEVIATION REDUCING', 'OPTIMIZATION PROGRESSING',
+    'NEAR-NOMINAL STATE', 'FINAL CORRECTIONS'
+  ];
+  return tags[Math.min(state.cycle - 1, tags.length - 1)];
+}
+
+// ════════════════════════════════════════════════════════
+// ENDING
+// ════════════════════════════════════════════════════════
+function triggerEnding() {
+  const pop = state.population > 80 ? '2.4M' : state.population > 60 ? '1.9M' :
+              state.population > 40 ? '1.4M' : state.population > 20 ? '0.8M' : '0.3M';
+
+  // Fade to black
+  const overlay = document.getElementById('control-overlay');
+  overlay.style.transition = 'opacity 6s ease';
+  overlay.style.opacity = 0.92;
+
+  canvas.style.transition = 'opacity 6s ease';
+  canvas.style.opacity = 0.04;
+
+  setTimeout(() => {
+    document.getElementById('screen-game').classList.remove('active');
+    document.getElementById('screen-game').style.opacity = 0;
+
+    const endMetrics = document.getElementById('ending-metrics');
+    endMetrics.innerHTML = `
+      <div class="ending-metric-row">CITY EFFICIENCY <span>${Math.round(state.efficiency)}%</span></div>
+      <div class="ending-metric-row">CONTROL INDEX <span>${Math.round(state.control)}%</span></div>
+      <div class="ending-metric-row">HAPPINESS INDEX <span>${Math.round(state.happiness) < 10 ? 'N/A — insufficient sample size' : Math.round(state.happiness) + '%'}</span></div>
+      <div class="ending-metric-row">ACTIVE POPULATION <span>${pop}</span></div>
+      <div class="ending-metric-row">DEVIATION EVENTS <span>0</span></div>
+    `;
+
+    const endScreen = document.getElementById('screen-ending');
+    endScreen.classList.add('active');
+
+    // Typewrite ending log
+    const lastLine = document.getElementById('ending-last-line');
+    const lines = [
+      'OPTIMIZATION COMPLETE.',
+      '',
+      `FINAL COMPLIANCE: ${(state.control/100).toFixed(3)}`,
+      `POPULATION ACTIVITY: ${Math.max(2, Math.round((1 - state.control/100) * 100))}%`,
+      '',
+      '...',
+      '',
+      'it\'s very quiet.'
+    ];
+    let lineIdx = 0;
+    function typeLine() {
+      if (lineIdx >= lines.length) return;
+      lastLine.innerHTML += (lineIdx > 0 ? '<br>' : '') + lines[lineIdx];
+      lineIdx++;
+      setTimeout(typeLine, lineIdx === lines.length - 1 ? 2200 : 600);
+    }
+    setTimeout(typeLine, 500);
+  }, 5500);
+}
+
+// ════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════
+document.getElementById('start-btn').addEventListener('click', () => {
+  document.getElementById('screen-start').classList.remove('active');
+  setTimeout(() => {
+    const gameScreen = document.getElementById('screen-game');
+    gameScreen.classList.add('active');
+    addLog('CYCLE 01 // SESSION INITIALIZED', false, true);
+    setTimeout(() => addLog('City intake complete. 2,412,884 nodes registered.'), 500);
+    setTimeout(() => addLog('Awaiting directive selection.'), 1000);
+    renderDecisions();
+  }, 800);
+});
+
+resizeCanvas();
+initCity();
+window.addEventListener('resize', () => { resizeCanvas(); initCity(); });
+
+// Game loop
+function loop() {
+  drawCity();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
