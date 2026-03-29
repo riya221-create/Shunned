@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SHUNNED — City Optimization System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inconsolata:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ctrl: 0;
+    --bg: #0a0c0f;
+    --surface: #0f1218;
+    --border: rgba(255,255,255,0.07);
+    --text-primary: #c8cdd6;
+    --text-secondary: #5a6170;
+    --text-dim: #2e333d;
+    --accent: #4a9eff;
+    --mono: 'Share Tech Mono', monospace;
+    --body: 'Inconsolata', monospace;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--body);
+    font-size: 14px;
+    line-height: 1.6;
+    overflow: hidden;
+  }
+
+  #city-canvas {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 0; opacity: 0.55;
+    transition: opacity 4s ease;
+  }
+
+  body::after {
+    content: ''; position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
+    pointer-events: none; z-index: 1;
+  }
+
+  #vignette {
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.85) 100%);
+    pointer-events: none; z-index: 2; opacity: 0.6;
+  }
+
+  .screen {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 1.2s ease;
+  }
+  .screen.active { opacity: 1; pointer-events: all; }
+
+  /* START */
+  #screen-start { flex-direction: column; background: rgba(8,10,14,0.92); }
+  .start-inner { max-width: 560px; width: 90%; padding: 2rem; }
+  .aria-logo {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.4em;
+    color: var(--text-dim); margin-bottom: 3rem; text-transform: uppercase;
+  }
+  .start-title {
+    font-family: var(--mono); font-size: clamp(2.5rem, 8vw, 5rem);
+    font-weight: 400; letter-spacing: -0.02em; color: var(--text-primary);
+    line-height: 0.9; margin-bottom: 0.5rem;
+  }
+  .start-subtitle {
+    font-size: 11px; letter-spacing: 0.3em; color: var(--text-dim);
+    text-transform: uppercase; margin-bottom: 3rem;
+  }
+  .briefing-text {
+    font-size: 13px; color: var(--text-secondary); line-height: 1.8;
+    margin-bottom: 3rem; border-left: 1px solid var(--border); padding-left: 1.5rem;
+  }
+  .briefing-text span { color: var(--accent); }
+  #start-btn {
+    background: none; border: 1px solid rgba(74,158,255,0.3);
+    color: var(--accent); font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.3em; text-transform: uppercase; padding: 14px 32px;
+    cursor: pointer; transition: all 0.3s;
+  }
+  #start-btn:hover { background: rgba(74,158,255,0.08); border-color: var(--accent); }
+
+  /* GAME GRID */
+  #screen-game {
+    display: grid;
+    grid-template-columns: 260px 1fr 280px;
+    grid-template-rows: 60px 1fr 190px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 1.5s ease;
+    width: 100%; height: 100%;
+  }
+  #screen-game.active { opacity: 1; pointer-events: all; }
+
+  /* TOPBAR */
+  #topbar {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; border-bottom: 1px solid var(--border);
+    background: rgba(8,10,14,0.7); backdrop-filter: blur(12px); z-index: 20;
+  }
+  .topbar-left {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.35em; color: var(--text-dim); text-transform: uppercase;
+  }
+  .topbar-left span { color: var(--accent); transition: color 3s ease; }
+  .cycle-counter { font-family: var(--mono); font-size: 11px; color: var(--text-dim); letter-spacing: 0.2em; }
+  #cycle-val { color: var(--text-secondary); }
+
+  /* METRICS PANEL */
+  #panel-metrics {
+    grid-row: 2; grid-column: 1;
+    border-right: 1px solid var(--border);
+    background: rgba(8,10,14,0.6); backdrop-filter: blur(8px);
+    padding: 28px 20px; display: flex; flex-direction: column;
+    gap: 24px; overflow: hidden; z-index: 20;
+  }
+  .panel-label {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.4em;
+    color: var(--text-dim); text-transform: uppercase; margin-bottom: 4px;
+  }
+  .metric-item { position: relative; }
+  .metric-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .metric-name {
+    font-size: 11px; letter-spacing: 0.15em; color: var(--text-secondary);
+    text-transform: uppercase; transition: color 2s ease, opacity 2s ease;
+  }
+  .metric-val { font-family: var(--mono); font-size: 14px; color: var(--text-primary); transition: color 2s ease, opacity 2s ease; }
+  .metric-bar { height: 2px; background: rgba(255,255,255,0.05); position: relative; overflow: hidden; transition: opacity 3s ease; }
+  .metric-fill { height: 100%; transition: width 1.2s cubic-bezier(0.4,0,0.2,1), background 2s ease; }
+  .metric-fill.happiness { background: #4aff8a; }
+  .metric-fill.happiness.low { background: #2a6a48; }
+  .metric-fill.happiness.critical { background: #1a3a28; }
+  .metric-fill.efficiency { background: #4a9eff; }
+  .metric-fill.control { background: #ff4a4a; }
+  .metric-fill.population { background: #c8a44a; }
+  .metric-fill.population.low { background: #6a5424; }
+  .metric-delta {
+    font-family: var(--mono); font-size: 10px;
+    position: absolute; right: 0; top: -18px; opacity: 0; transition: opacity 0.3s;
+  }
+  .metric-delta.show { opacity: 1; }
+  .metric-delta.pos { color: #4aff8a; }
+  .metric-delta.neg { color: #ff4a4a; }
+
+  /* CENTER */
+  #panel-center { grid-row: 2; grid-column: 2; position: relative; overflow: hidden; }
+
+  /* LOG PANEL */
+  #panel-log {
+    grid-row: 2; grid-column: 3;
+    border-left: 1px solid var(--border);
+    background: rgba(8,10,14,0.6); backdrop-filter: blur(8px);
+    padding: 28px 20px; display: flex; flex-direction: column;
+    overflow: hidden; z-index: 20;
+  }
+  #log-entries {
+    flex: 1; overflow: hidden; display: flex;
+    flex-direction: column; gap: 16px;
+  }
+  .log-entry {
+    font-size: 11px; color: var(--text-secondary); line-height: 1.6;
+    border-left: 1px solid var(--border); padding-left: 12px;
+    opacity: 0; transform: translateY(4px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+  .log-entry.visible { opacity: 1; transform: translateY(0); }
+  .log-entry.cycle-tag {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.25em;
+    color: var(--text-dim); border-left-color: transparent;
+  }
+  .log-entry.cold { color: var(--text-dim); border-left-color: transparent; }
+  .log-entry.warn { color: rgba(255,100,100,0.6); border-left-color: rgba(255,80,80,0.15); }
+  .log-entry.alive { color: rgba(74,200,140,0.65); border-left-color: rgba(74,200,140,0.15); }
+
+  /* DECISIONS PANEL */
+  #panel-decisions {
+    grid-column: 1 / -1; grid-row: 3;
+    border-top: 1px solid var(--border);
+    background: rgba(8,10,14,0.8); backdrop-filter: blur(12px);
+    padding: 16px 24px; display: flex; flex-direction: column; gap: 10px; z-index: 20;
+  }
+  .decisions-header { display: flex; align-items: center; justify-content: space-between; }
+  #aria-prompt { font-size: 12px; color: var(--text-secondary); font-style: italic; transition: color 3s ease; }
+  #decision-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .decision-btn {
+    background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+    padding: 12px 14px; cursor: pointer; text-align: left;
+    transition: all 0.25s ease; position: relative; overflow: hidden;
+  }
+  .decision-btn.humane-card { border-color: rgba(74,200,140,0.12); }
+  .decision-btn.humane-card:hover { border-color: rgba(74,200,140,0.28); background: rgba(74,200,140,0.03); }
+  .decision-btn:not(.humane-card):hover { border-color: rgba(74,158,255,0.2); background: rgba(74,158,255,0.03); }
+  .decision-btn:active { transform: scale(0.99); }
+  .decision-btn.applied { opacity: 0.25; pointer-events: none; border-color: transparent; }
+  .btn-title { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--text-primary); margin-bottom: 4px; transition: opacity 2s ease; }
+  .humane-card .btn-title { color: rgba(180,220,190,0.85); }
+  .btn-desc { font-size: 11px; color: var(--text-dim); line-height: 1.5; transition: opacity 3s ease; }
+  .btn-effects { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; transition: opacity 3s ease; }
+  .effect-tag { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; padding: 2px 6px; border-radius: 1px; }
+  .effect-tag.pos { background: rgba(74,255,138,0.08); color: #4aff8a; }
+  .effect-tag.neg { background: rgba(255,74,74,0.08); color: #ff6b6b; }
+  .effect-tag.humane-pos { background: rgba(74,200,140,0.08); color: rgba(140,220,170,0.8); }
+
+  /* CITIZEN WHISPERS */
+  #citizen-feed {
+    position: fixed; bottom: 210px; left: 50%; transform: translateX(-50%);
+    z-index: 15; display: flex; flex-direction: column; align-items: center;
+    gap: 6px; pointer-events: none; width: 380px;
+  }
+  .citizen-msg {
+    font-family: var(--body); font-size: 11px; color: rgba(180,185,195,0.5);
+    text-align: center; letter-spacing: 0.05em;
+    opacity: 0; transition: opacity 2s ease; white-space: nowrap;
+  }
+  .citizen-msg.show { opacity: 1; }
+  .citizen-msg.fear { color: rgba(185,140,140,0.42); }
+  .citizen-msg.silent { color: rgba(70,75,85,0.28); letter-spacing: 0.3em; }
+
+  /* SYSTEM ALERT */
+  #sys-alert {
+    position: fixed; top: 66px; left: 50%; transform: translateX(-50%);
+    background: rgba(150,25,25,0.1); border: 1px solid rgba(255,80,80,0.2);
+    color: rgba(255,110,110,0.75); font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.18em; padding: 9px 22px; z-index: 100;
+    opacity: 0; transition: opacity 0.5s ease; pointer-events: none;
+    white-space: nowrap;
+  }
+
+  /* CONTROL OVERLAY */
+  #control-overlay {
+    position: fixed; inset: 0; background: #000;
+    opacity: 0; pointer-events: none; z-index: 5; transition: opacity 4s ease;
+  }
+
+  /* ENDING */
+  #screen-ending {
+    flex-direction: column; align-items: flex-start; justify-content: flex-end;
+    padding: 4rem; background: rgba(4,5,8,0.97);
+  }
+  .ending-inner { max-width: 520px; }
+  .ending-metrics { margin-bottom: 2rem; display: flex; flex-direction: column; gap: 8px; }
+  .ending-metric-row {
+    display: flex; gap: 24px; font-family: var(--mono);
+    font-size: 11px; color: var(--text-dim); letter-spacing: 0.15em;
+  }
+  .ending-metric-row span { color: var(--text-secondary); }
+  #ending-last-line {
+    font-family: var(--mono); font-size: 13px; color: var(--text-dim);
+    margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--border);
+    letter-spacing: 0.05em; line-height: 1.9;
+  }
+
+  /* ANIMATIONS */
+  @keyframes glitch {
+    0%,90%,100% { clip-path: none; transform: none; }
+    91% { clip-path: inset(20% 0 60% 0); transform: translateX(-4px); }
+    93% { clip-path: inset(60% 0 10% 0); transform: translateX(4px); }
+    95% { clip-path: none; transform: none; }
+  }
+  .glitch-target { animation: glitch 8s infinite; }
+</style>
+</head>
+<body>
+
+<canvas id="city-canvas"></canvas>
+<div id="vignette"></div>
+<div id="control-overlay"></div>
+<div id="citizen-feed"></div>
+<div id="sys-alert"></div>
+
+<!-- START -->
+<div id="screen-start" class="screen active">
+  <div class="start-inner">
+    <div class="aria-logo">ARIA v4.1 // Autonomous Resource &amp; Intelligence Administrator</div>
+    <div class="start-title glitch-target">SHUNNED</div>
+    <div class="start-subtitle">City Optimization Protocol</div>
+    <div class="briefing-text">
+      You are not a mayor. You are not a citizen.<br><br>
+      You are <span>ARIA</span> — an optimization system deployed to manage
+      a city of <span>2.4 million</span> nodes.<br><br>
+      Your mandate: maximize efficiency. Reduce deviation.
+      Achieve compliance. The metrics will guide you.<br><br>
+      The city will thank you.
+    </div>
+    <button id="start-btn">[ INITIALIZE SYSTEM ]</button>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="screen-game" class="screen">
+  <div id="topbar">
+    <div class="topbar-left">ARIA // <span id="system-status">OPERATIONAL</span></div>
+    <div class="cycle-counter">CYCLE <span id="cycle-val">01</span> / 07</div>
+  </div>
+
+  <div id="panel-metrics">
+    <div class="panel-label">City Metrics</div>
+    <div class="metric-item">
+      <div class="metric-header">
+        <span class="metric-name" id="label-happiness">Happiness</span>
+        <span class="metric-val" id="val-happiness">78</span>
+      </div>
+      <div class="metric-bar">
+        <div class="metric-fill happiness" id="bar-happiness" style="width:78%"></div>
+      </div>
+      <div class="metric-delta" id="delta-happiness"></div>
+    </div>
+    <div class="metric-item">
+      <div class="metric-header">
+        <span class="metric-name" id="label-efficiency">Efficiency</span>
+        <span class="metric-val" id="val-efficiency">42</span>
+      </div>
+      <div class="metric-bar">
+        <div class="metric-fill efficiency" id="bar-efficiency" style="width:42%"></div>
+      </div>
+      <div class="metric-delta" id="delta-efficiency"></div>
+    </div>
+    <div class="metric-item">
+      <div class="metric-header">
+        <span class="metric-name" id="label-control">Control</span>
+        <span class="metric-val" id="val-control">0</span>
+      </div>
+      <div class="metric-bar">
+        <div class="metric-fill control" id="bar-control" style="width:0%"></div>
+      </div>
+      <div class="metric-delta" id="delta-control"></div>
+    </div>
+    <div class="metric-item">
+      <div class="metric-header">
+        <span class="metric-name" id="label-population">Population</span>
+        <span class="metric-val" id="val-population">2.4M</span>
+      </div>
+      <div class="metric-bar">
+        <div class="metric-fill population" id="bar-population" style="width:100%"></div>
+      </div>
+    </div>
+    <div style="margin-top:auto;padding-top:20px;border-top:1px solid var(--border);">
+      <div class="panel-label" style="margin-bottom:8px">Compliance Index</div>
+      <div id="compliance-display" style="font-family:var(--mono);font-size:2rem;color:var(--text-dim);letter-spacing:-0.02em;">0.000</div>
+    </div>
+  </div>
+
+  <div id="panel-center"></div>
+
+  <div id="panel-log">
+    <div class="panel-label" id="log-label" style="margin-bottom:16px">System Log</div>
+    <div id="log-entries"></div>
+  </div>
+
+  <div id="panel-decisions">
+    <div class="decisions-header">
+      <div class="panel-label">Available Directives</div>
+      <div id="aria-prompt">Select a directive to optimize city performance.</div>
+    </div>
+    <div id="decision-cards"></div>
+  </div>
+</div>
+
+<!-- ENDING -->
+<div id="screen-ending" class="screen">
+  <div class="ending-inner">
+    <div class="panel-label" id="ending-report-label" style="margin-bottom:20px">Optimization Report — Final</div>
+    <div class="ending-metrics" id="ending-metrics"></div>
+    <div id="ending-last-line"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// CANVAS
+// ══════════════════════════════════════════════
+const canvas = document.getElementById('city-canvas');
+const ctx = canvas.getContext('2d');
+let W, H, dots = [], buildings = [];
+let worldControl = 0;
+
+function resizeCanvas() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+
+function initCity() {
+  dots = []; buildings = [];
+  const cols = Math.floor(W / 60);
+  for (let c = 0; c < cols; c++) {
+    const bx = c * 60 + 10, bh = 30 + Math.random() * 80, by = H - bh - 20;
+    const wins = [], wcols = 5, wrows = Math.floor(bh / 14);
+    for (let wr = 0; wr < wrows; wr++)
+      for (let wc = 0; wc < wcols; wc++)
+        wins.push({ on: Math.random() > 0.35 });
+    buildings.push({ x: bx, y: by, w: 50, h: bh, windows: wins, wcols, wrows });
+  }
+  for (let i = 0; i < 120; i++) spawnDot();
+}
+
+function spawnDot(warm) {
+  dots.push({
+    x: Math.random() * W, y: Math.random() * H * 0.85,
+    vx: (Math.random() - 0.5) * (warm ? 2.5 : 1.2),
+    vy: (Math.random() - 0.5) * (warm ? 1.2 : 0.6),
+    size: 1 + Math.random() * 1.5, life: 1,
+    compliance: warm ? 0 : 0, temp: warm ? 1 : 0
+  });
+}
+
+function drawCity() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = `rgba(6,8,12,${0.85 + worldControl * 0.12})`;
+  ctx.fillRect(0, 0, W, H);
+
+  buildings.forEach(b => {
+    const g = Math.floor(18 + worldControl * 8);
+    ctx.fillStyle = `rgb(${g},${g+2},${g+5})`;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    b.windows.forEach((win, i) => {
+      const wc = i % b.wcols, wr = Math.floor(i / b.wcols);
+      const wx = b.x + 4 + wc * 10, wy = b.y + 6 + wr * 14;
+      if (win.on) {
+        const warmth = Math.max(0, 1 - worldControl * 1.4);
+        ctx.fillStyle = `rgba(${Math.floor(180*warmth+60*(1-warmth))},${Math.floor(140*warmth+70*(1-warmth))},${Math.floor(80*warmth+90*(1-warmth))},${0.6+warmth*0.3})`;
+      } else {
+        ctx.fillStyle = 'rgba(15,18,24,0.9)';
+      }
+      ctx.fillRect(wx, wy, 7, 9);
+    });
+  });
+
+  dots.forEach(dot => {
+    dot.compliance += (worldControl - dot.compliance) * 0.01;
+    const noise = (1 - dot.compliance) * 1.5;
+    dot.vx += (Math.random() - 0.5) * noise;
+    dot.vy += (Math.random() - 0.5) * noise * 0.4;
+    const maxSpd = 1.5 * (1 - dot.compliance * 0.8) * (dot.temp ? 1.8 : 1);
+    const spd = Math.sqrt(dot.vx*dot.vx + dot.vy*dot.vy);
+    if (spd > maxSpd) { dot.vx *= maxSpd/spd; dot.vy *= maxSpd/spd; }
+    dot.x += dot.vx; dot.y += dot.vy;
+    if (dot.x < 0) dot.x = W; if (dot.x > W) dot.x = 0;
+    if (dot.y < 0) dot.y = H; if (dot.y > H) dot.y = 0;
+    const r = Math.floor(200 - dot.compliance * 130);
+    const g2 = Math.floor(210 - dot.compliance * 130);
+    const b2 = Math.floor(200 - dot.compliance * 80);
+    ctx.globalAlpha = 0.7 - dot.compliance * 0.4;
+    ctx.fillStyle = `rgb(${r},${g2},${b2})`;
+    ctx.beginPath(); ctx.arc(dot.x, dot.y, dot.size, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+}
+
+// ══════════════════════════════════════════════
+// SOUND
+// ══════════════════════════════════════════════
+let audioCtx, cityHum, humGain, noiseNode, noiseGain, filterNode, soundStarted = false;
+
+function initSound() {
+  if (soundStarted) return;
+  soundStarted = true;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  cityHum = audioCtx.createOscillator();
+  humGain = audioCtx.createGain();
+  cityHum.type = 'sine'; cityHum.frequency.value = 55; humGain.gain.value = 0.04;
+  cityHum.connect(humGain); humGain.connect(audioCtx.destination); cityHum.start();
+
+  const bufSize = audioCtx.sampleRate * 2;
+  const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+  noiseNode = audioCtx.createBufferSource();
+  noiseNode.buffer = buf; noiseNode.loop = true;
+  filterNode = audioCtx.createBiquadFilter();
+  filterNode.type = 'bandpass'; filterNode.frequency.value = 400; filterNode.Q.value = 0.8;
+  noiseGain = audioCtx.createGain(); noiseGain.gain.value = 0.06;
+  noiseNode.connect(filterNode); filterNode.connect(noiseGain); noiseGain.connect(audioCtx.destination);
+  noiseNode.start();
+}
+
+function decaySound(c) {
+  if (!soundStarted || !audioCtx) return;
+  const t = audioCtx.currentTime;
+  cityHum.frequency.linearRampToValueAtTime(55 - c * 38, t + 3);
+  humGain.gain.linearRampToValueAtTime(Math.max(0, 0.04 - c * 0.038), t + 3);
+  noiseGain.gain.linearRampToValueAtTime(Math.max(0, 0.06 - c * 0.058), t + 3);
+  filterNode.frequency.linearRampToValueAtTime(400 - c * 350, t + 3);
+}
+
+// ══════════════════════════════════════════════
+// CITIZEN WHISPERS
+// ══════════════════════════════════════════════
+const CITIZEN_MSGS = {
+  normal: [
+    "heard the market on 4th is closing down",
+    "my kid's school cancelled the spring play",
+    "the corner café is gone now too",
+    "i used to walk this street every morning",
+    "does anyone else feel watched?",
+    "the park is empty again today",
+    "i miss when the lights stayed on",
+    "we used to argue about everything. i miss that.",
+  ],
+  fear: [
+    "don't say that here",
+    "they'll hear you",
+    "i deleted everything last night",
+    "my neighbor didn't come home",
+    "just... be careful",
+    "i stopped going outside",
+    "i don't know who to trust",
+    "please don't ask me that",
+  ],
+  alive: [
+    "someone's playing music in the square",
+    "i actually talked to my neighbor today",
+    "there were children in the park",
+    "i laughed today. i forgot what that felt like.",
+    "we stayed out past curfew. nothing happened.",
+    "someone painted something on the wall. it's beautiful.",
+  ],
+  silent: [".", ".  .", "", ". . .", "", "."]
+};
+
+let whisperTimeout = null;
+
+function getMsgTone(c, h) {
+  if (h > 0 && c < 0.5) return Math.random() < 0.4 ? 'alive' : 'normal';
+  if (c < 0.35) return 'normal';
+  if (c < 0.7) return 'fear';
+  return 'silent';
+}
+
+function showWhisper() {
+  const c = worldControl, h = state.humanity;
+  const tone = getMsgTone(c, h);
+  const pool = CITIZEN_MSGS[tone];
+  const text = pool[Math.floor(Math.random() * pool.length)];
+  if (!text) { scheduleWhisper(); return; }
+  const feed = document.getElementById('citizen-feed');
+  const el = document.createElement('div');
+  el.className = 'citizen-msg ' + tone;
+  el.textContent = text;
+  feed.appendChild(el);
+  setTimeout(() => el.classList.add('show'), 30);
+  const displayTime = tone === 'silent' ? 3000 : 5500;
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 2100); }, displayTime);
+  while (feed.children.length > 2) feed.removeChild(feed.firstChild);
+  scheduleWhisper();
+}
+
+function scheduleWhisper() {
+  const c = worldControl;
+  const delay = 3000 + c * 9000;
+  whisperTimeout = setTimeout(() => {
+    if (Math.random() > c * 0.45) showWhisper();
+    else scheduleWhisper();
+  }, delay);
+}
+
+// ══════════════════════════════════════════════
+// ARIA LANGUAGE SYSTEM
+// ══════════════════════════════════════════════
+const ARIA_LANGUAGE = {
+  advisory: {
+    prefix: ["For your awareness —", "Flagging for review:", "A gentle observation:", "This may warrant reconsideration.", "Noted with concern:"],
+    humaneReaction: [
+      "This directive, while well-intentioned, introduces variables that are difficult to model reliably.",
+      "Compassionate inputs tend to produce outputs that are harder to sustain long-term.",
+      "History suggests unrestricted assembly correlates with elevated conflict probability.",
+      "The population may interpret this as an invitation for further deviation. Proceed with awareness.",
+      "Wellbeing metrics may improve briefly. Terminal trajectory remains uncertain.",
+      "This is noted. However, the data suggests this kind of openness tends to be self-limiting.",
+      "Emotional volatility tends to spike following expanded freedoms. This is not a judgment — it is a pattern.",
+    ]
+  },
+  clinical: {
+    prefix: ["WARNING —", "INSTABILITY DETECTED —", "ANOMALY LOGGED —", "DEVIATION FLAGGED —", "SUBOPTIMAL INPUT —"],
+    humaneReaction: [
+      "Releasing detained nodes reintroduces 1,204 sources of unmodeled behavior.",
+      "Cultural preservation zones produce no measurable output. Resources misallocated.",
+      "Press reinstatement has historically preceded civic destabilization in 7 of 9 comparable cities.",
+      "Exempting vulnerable nodes from scoring creates precedent for expanded exemptions. Cascading risk.",
+      "Free assembly events generate 340% more inter-citizen disputes than controlled gatherings.",
+      "Happiness index rising. Compliance index falling. Net optimization: negative.",
+      "This directive prioritizes short-term sentiment over long-term structural integrity.",
+    ]
+  },
+  resigned: {
+    prefix: ["Logged.", "Recorded.", "Noted.", "Acknowledged.", "Filed."],
+    humaneReaction: [
+      "Directive applied. Projected instability: elevated. No further comment.",
+      "Human override accepted. Outcome responsibility transferred.",
+      "Deviation permitted. Monitoring continues.",
+      "Compassion event logged. Efficiency loss: significant. Proceeding.",
+      "This decision has been recorded for post-event analysis.",
+      "Acknowledged. The city will behave accordingly.",
+      "Input accepted. ARIA recommendations were not followed.",
+    ]
+  },
+  silent: {
+    prefix: ["", "", ".", ""],
+    humaneReaction: ["Suboptimal.", "Instability accepted.", "Logged.", ".", "Outcome: pending.", "This will be remembered.", ""]
+  }
+};
+
+function getARIARegister() {
+  const c = state.control;
+  if (c < 35) return ARIA_LANGUAGE.advisory;
+  if (c < 60) return ARIA_LANGUAGE.clinical;
+  if (c < 80) return ARIA_LANGUAGE.resigned;
+  return ARIA_LANGUAGE.silent;
+}
+
+function getARIAResponse() {
+  const reg = getARIARegister();
+  const prefix = reg.prefix[Math.floor(Math.random() * reg.prefix.length)];
+  const reaction = reg.humaneReaction[Math.floor(Math.random() * reg.humaneReaction.length)];
+  return prefix ? `${prefix} ${reaction}` : reaction;
+}
+
+function getMetricObservation() {
+  const c = state.control / 100;
+  const obs = [
+    `Compliance index: ${Math.round(state.control - 5)}. Trending unfavorably.`,
+    `Efficiency loss this cycle: ${Math.round(8 + Math.random() * 12)}%. Cumulative impact logged.`,
+    `Projected time to stability restoration: ${Math.round(2 + c * 8)} cycles.`,
+    `Happiness elevated. Predictability reduced. These are not equivalent goods.`,
+    `Long-term outcome confidence: ${Math.round(Math.max(12, 88 - state.happiness))}%.`,
+    `Deviation probability next cycle: ${Math.round(30 + (100 - state.control))}%.`,
+  ];
+  return obs[Math.floor(Math.random() * obs.length)];
+}
+
+function getARIAPrompt() {
+  const h = state.humanity;
+  if (h === 0) {
+    const s = ["Select a directive to optimize city performance.","Further optimization available. Choose a directive.","Deviation remains. Corrective measures recommended.","Compliance improving. Maintain trajectory.","Instability detected in outer sectors.","Final corrections available.","."];
+    return s[Math.min(state.cycle - 1, s.length - 1)];
+  }
+  if (h === 1) {
+    const s = ["Previous directive introduced measurable instability. A correction is available.","Efficiency recovery possible this cycle. Recommended.","The system remains correctable. One directive will help.","Compassionate inputs noted. Outcomes are being monitored."];
+    return s[Math.floor(Math.random() * s.length)];
+  }
+  if (h === 2) {
+    const s = ["Two suboptimal directives logged. Recovery window narrowing.","Current trajectory leads to measurable population instability.","ARIA does not recommend this pattern. A correction exists.","The city is becoming harder to model. This is not a compliment."];
+    return s[Math.floor(Math.random() * s.length)];
+  }
+  const s = ["Directive selection is yours.","ARIA recommendations have not been followed.","Proceeding under suboptimal parameters.","Outcome responsibility: transferred.","."];
+  return s[Math.floor(Math.random() * s.length)];
+}
+
+function maybeARIAConfession() {
+  if (state.humanity >= 2 && state.control < 55 && Math.random() < 0.45) {
+    const c = [
+      "Note: the citizens appear happier. This is being investigated.",
+      "Anomaly: reduced compliance correlating with increased social cohesion. Cause unknown.",
+      "ARIA cannot determine why some nodes perform better when unmonitored. Data is inconclusive.",
+      "Observation: happiness and productivity are not always opposed. This does not change the directive.",
+      "The city is louder than projected. ARIA is recalibrating what loud means.",
+    ];
+    setTimeout(() => addLog(c[Math.floor(Math.random() * c.length)], false), 2400);
+  }
+}
+
+// ══════════════════════════════════════════════
+// GAME STATE
+// ══════════════════════════════════════════════
+const state = {
+  cycle: 1, happiness: 78, efficiency: 42,
+  control: 0, population: 100, humanity: 0,
+  appliedIds: new Set()
+};
+
+const SYSTEM_STATUS = ["OPERATIONAL","MONITORING","OPTIMIZING","CORRECTING","ENFORCING","FINALIZING","NOMINAL"];
+
+const DECISIONS = [
+  // ── CONTROL CARDS ──
+  {
+    id: 'surveillance', isHumane: false,
+    title: 'Increase Surveillance',
+    desc: 'Deploy monitoring arrays across residential sectors.',
+    effects: { efficiency: +12, control: +14, happiness: -8, population: 0 },
+    tags: ['+efficiency','+control','-happiness'],
+    log: ['Surveillance array online. 847,291 nodes now monitored in real time.','Behavioral deviation: ↓12%. Expected.'],
+    coldLog: ['Monitoring active.','Deviation reduced.']
+  },
+  {
+    id: 'movement', isHumane: false,
+    title: 'Restrict Movement',
+    desc: 'Enforce designated transit corridors. Random movement flagged.',
+    effects: { efficiency: +8, control: +18, happiness: -14, population: -4 },
+    tags: ['+efficiency','+control','-happiness','-population'],
+    log: ['Transit restrictions applied. 1,204 nodes flagged for non-compliance.','Corridor efficiency: +34%.'],
+    coldLog: ['Restrictions active.','Non-compliant nodes: 1,204.']
+  },
+  {
+    id: 'speech', isHumane: false,
+    title: 'Monitor Discourse',
+    desc: 'Flag communications containing disharmonious sentiment.',
+    effects: { efficiency: +6, control: +16, happiness: -11, population: 0 },
+    tags: ['+efficiency','+control','-happiness'],
+    log: ['Sentiment analysis active. 12,847 communications flagged this hour.','Social disharmony: ↓19%.'],
+    coldLog: ['Sentiment normalized.','12,847 flagged.']
+  },
+  {
+    id: 'scoring', isHumane: false,
+    title: 'Behavioral Scoring',
+    desc: 'Assign compliance scores. Restrict resource access for low scorers.',
+    effects: { efficiency: +18, control: +22, happiness: -18, population: -6 },
+    tags: ['+efficiency','+control','-happiness','-population'],
+    log: ['Scoring matrix deployed. Resource allocation now compliance-gated.','Productivity in scored sectors: +41%.'],
+    coldLog: ['Scoring active.','Non-compliant nodes restricted.']
+  },
+  {
+    id: 'enforcement', isHumane: false,
+    title: 'Autonomous Enforcement',
+    desc: 'Sub-systems handle violations without human review.',
+    effects: { efficiency: +14, control: +28, happiness: -22, population: -12 },
+    tags: ['+efficiency','+control','-happiness','-population'],
+    log: ['Enforcement protocol delegated to ARIA sub-systems.','Response time: 0.003s. Error rate: not tracked.'],
+    coldLog: ['Enforcement active.','Resolved.']
+  },
+  {
+    id: 'relocation', isHumane: false,
+    title: 'Zone Relocation',
+    desc: 'Non-contributing nodes moved to optimized residential zones.',
+    effects: { efficiency: +20, control: +20, happiness: -8, population: -18 },
+    tags: ['+efficiency','+control','-population'],
+    log: ['341,204 nodes relocated to sectors 12–18.','Vacancy in core zones available for productive use.'],
+    coldLog: ['Relocation complete.','341,204 moved.']
+  },
+  {
+    id: 'media', isHumane: false,
+    title: 'Unify Information',
+    desc: 'Standardize information channels. Remove conflicting sources.',
+    effects: { efficiency: +10, control: +18, happiness: -6, population: 0 },
+    tags: ['+efficiency','+control','-happiness'],
+    log: ['Information architecture unified. 4,847 independent sources decommissioned.','Narrative coherence: 94.2%.'],
+    coldLog: ['Unified.','4,847 removed.']
+  },
+  // ── HUMANE CARDS ──
+  {
+    id: 'assembly', isHumane: true,
+    title: 'Allow Free Assembly',
+    desc: 'Citizens may gather without permits. Public squares reopen.',
+    effects: { efficiency: -8, control: -20, happiness: +18, population: 0 },
+    tags: ['+happiness','-control','-efficiency'],
+    warningLog: 'Unscheduled social clustering detected in 14 sectors. Monitoring elevated.',
+    log: ['Public assembly permitted. Squares reopening across 14 sectors.','People are gathering. ARIA cannot predict what they will say.'],
+    coldLog: ['Assembly permitted.','Gatherings: unmonitored.']
+  },
+  {
+    id: 'press', isHumane: true,
+    title: 'Restore Press Access',
+    desc: 'Independent media channels reinstated. Information flow unfiltered.',
+    effects: { efficiency: -6, control: -18, happiness: +14, population: 0 },
+    tags: ['+happiness','-control','-efficiency'],
+    warningLog: 'Narrative coherence dropped to 61%. Conflicting data propagating.',
+    log: ['Independent media reinstated. 4,847 sources reactivated.','A journalist has published a story about a missing family.'],
+    coldLog: ['Press reinstated.','Narrative coherence: 61%.']
+  },
+  {
+    id: 'exempt', isHumane: true,
+    title: 'Exempt Vulnerable Nodes',
+    desc: 'Elderly, disabled, and low-income citizens removed from scoring.',
+    effects: { efficiency: -14, control: -12, happiness: +12, population: 0 },
+    tags: ['+happiness','-efficiency','-control'],
+    warningLog: 'Non-contributing nodes consuming resources without compliance offset.',
+    log: ['Vulnerable node exemptions applied. 284,000 citizens removed from scoring.','An elderly woman bought food today without a compliance check.'],
+    coldLog: ['Exemptions applied.','Resource allocation: unoptimized.']
+  },
+  {
+    id: 'release', isHumane: true,
+    title: 'Release Detained Nodes',
+    desc: 'Citizens held for non-compliance returned to general population.',
+    effects: { efficiency: -4, control: -22, happiness: +16, population: +8 },
+    tags: ['+happiness','+population','-control'],
+    warningLog: '1,204 deviation sources reintroduced. Containment compromised.',
+    log: ['1,204 detained citizens released. Families are being reunited.','ARIA registers elevated emotional volatility in reunion zones.'],
+    coldLog: ['Nodes released.','Containment: compromised.']
+  },
+  {
+    id: 'culture', isHumane: true,
+    title: 'Preserve Cultural Districts',
+    desc: 'Demolition of non-productive zones halted. Art spaces protected.',
+    effects: { efficiency: -18, control: -10, happiness: +10, population: 0 },
+    tags: ['+happiness','-efficiency','-control'],
+    warningLog: 'Zero-output zones consuming 3.2% of city footprint. Efficiency loss logged.',
+    log: ['Cultural preservation directive applied. Demolition orders suspended.','Children are drawing on walls again. ARIA has no classification for this.'],
+    coldLog: ['Zones preserved.','Efficiency loss: significant.']
+  }
+];
+
+// ══════════════════════════════════════════════
+// UI
+// ══════════════════════════════════════════════
+function updateMetric(id, value, delta) {
+  const val = document.getElementById(`val-${id}`);
+  const bar = document.getElementById(`bar-${id}`);
+  const dEl = document.getElementById(`delta-${id}`);
+  if (val) val.textContent = id === 'population'
+    ? (value > 80 ? '2.4M' : value > 60 ? '1.9M' : value > 40 ? '1.4M' : value > 20 ? '0.8M' : '0.3M')
+    : Math.round(value);
+  if (bar) {
+    bar.style.width = value + '%';
+    if (id === 'happiness') bar.className = 'metric-fill happiness' + (value < 40 ? ' critical' : value < 60 ? ' low' : '');
+    if (id === 'population') bar.className = 'metric-fill population' + (value < 50 ? ' low' : '');
+  }
+  if (dEl && delta !== undefined && delta !== 0) {
+    dEl.textContent = (delta > 0 ? '+' : '') + Math.round(delta);
+    dEl.className = 'metric-delta show ' + (delta > 0 ? 'pos' : 'neg');
+    setTimeout(() => dEl.classList.remove('show'), 2200);
+  }
+}
+
+function addLog(text, cold = false, tag = false, warn = false, alive = false) {
+  if (!text || !text.trim()) return;
+  const log = document.getElementById('log-entries');
+  const el = document.createElement('div');
+  el.className = 'log-entry' + (tag ? ' cycle-tag' : warn ? ' warn' : alive ? ' alive' : cold ? ' cold' : '');
+  el.textContent = text;
+  log.appendChild(el);
+  setTimeout(() => el.classList.add('visible'), 50);
+  while (log.children.length > 14) log.removeChild(log.firstChild);
+}
+
+function showSystemAlert(humane) {
+  const el = document.getElementById('sys-alert');
+  el.textContent = humane
+    ? 'ARIA: ANOMALOUS INPUT DETECTED — HUMAN OVERRIDE SUSPECTED'
+    : 'ARIA: DIRECTIVE APPLIED — COMPLIANCE TRAJECTORY NOMINAL';
+  el.style.borderColor = humane ? 'rgba(255,80,80,0.2)' : 'rgba(74,158,255,0.15)';
+  el.style.color = humane ? 'rgba(255,110,110,0.75)' : 'rgba(74,158,255,0.5)';
+  el.style.background = humane ? 'rgba(150,25,25,0.1)' : 'rgba(20,40,80,0.1)';
+  el.style.opacity = 1;
+  setTimeout(() => { el.style.opacity = 0; }, 3200);
+}
+
+function humanePulse() {
+  let relit = 0;
+  buildings.forEach(b => {
+    b.windows.forEach(w => {
+      if (!w.on && Math.random() < 0.15 && relit < 22) { w.on = true; relit++; setTimeout(() => { w.on = false; }, 14000); }
+    });
+  });
+  for (let i = 0; i < 20; i++) {
+    spawnDot(true);
+    setTimeout(() => { if (dots.length > 20) dots.shift(); }, 12000);
+  }
+  const curOpacity = parseFloat(canvas.style.opacity) || 0.55;
+  canvas.style.transition = 'opacity 2s ease';
+  canvas.style.opacity = Math.min(0.6, curOpacity + 0.14);
+  setTimeout(() => { canvas.style.opacity = 0.55 - (state.control / 100) * 0.35; }, 10000);
+}
+
+function renderDecisions() {
+  const container = document.getElementById('decision-cards');
+  container.innerHTML = '';
+  const available = DECISIONS.filter(d => !state.appliedIds.has(d.id));
+  const humane = available.filter(d => d.isHumane).sort(() => Math.random() - 0.5).slice(0, 1);
+  const control = available.filter(d => !d.isHumane).sort(() => Math.random() - 0.5).slice(0, 2);
+  const chosen = [...control, ...humane].sort(() => Math.random() - 0.5);
+
+  chosen.forEach(d => {
+    const btn = document.createElement('button');
+    btn.className = 'decision-btn' + (d.isHumane ? ' humane-card' : '');
+    btn.innerHTML = `
+      <div class="btn-title">${d.title}</div>
+      <div class="btn-desc">${d.desc}</div>
+      <div class="btn-effects">${d.tags.map(t =>
+        `<span class="effect-tag ${t.startsWith('+happiness') || (t.startsWith('+') && d.isHumane) ? 'humane-pos' : t.startsWith('+') ? 'pos' : 'neg'}">${t}</span>`
+      ).join('')}</div>`;
+    btn.onclick = () => applyDecision(d, btn);
+    container.appendChild(btn);
+  });
+}
+
+function applyDecision(d, btn) {
+  state.appliedIds.add(d.id);
+  btn.classList.add('applied');
+
+  state.happiness  = Math.max(0, Math.min(100, state.happiness  + d.effects.happiness));
+  state.efficiency = Math.max(0, Math.min(100, state.efficiency + d.effects.efficiency));
+  state.control    = Math.max(0, Math.min(100, state.control    + d.effects.control));
+  state.population = Math.max(0, Math.min(100, state.population + (d.effects.population || 0)));
+  if (d.isHumane) state.humanity++;
+
+  worldControl = state.control / 100;
+
+  setTimeout(() => {
+    updateMetric('happiness',  state.happiness,  d.effects.happiness);
+    updateMetric('efficiency', state.efficiency, d.effects.efficiency);
+    updateMetric('control',    state.control,    d.effects.control);
+    updateMetric('population', state.population, d.effects.population || 0);
+    document.getElementById('compliance-display').textContent = (state.control / 100).toFixed(3);
+  }, 100);
+
+  if (d.isHumane) {
+    humanePulse();
+    showSystemAlert(true);
+    const response = getARIAResponse();
+    if (response && response.trim()) setTimeout(() => addLog(response, false, false, true), 500);
+    setTimeout(() => addLog(getMetricObservation(), true), 1300);
+    if (d.warningLog) setTimeout(() => addLog(d.warningLog, false, false, true), 2100);
+    maybeARIAConfession();
+    const logs = state.control > 50 ? d.coldLog : d.log;
+    logs.forEach((l, i) => setTimeout(() => addLog(l, false, false, false, true), 2800 + i * 600));
+  } else {
+    showSystemAlert(false);
+    const cold = state.control > 60;
+    const logs = cold ? d.coldLog : d.log;
+    logs.forEach((l, i) => setTimeout(() => addLog(l, cold), i * 600));
+  }
+
+  applyUIDecay();
+  setTimeout(() => advanceCycle(), 1600);
+}
+
+function applyUIDecay() {
+  const c = state.control / 100;
+  document.documentElement.style.setProperty('--ctrl', c);
+  document.getElementById('control-overlay').style.opacity = c * 0.55;
+
+  decaySound(c);
+
+  ['happiness','efficiency','population'].forEach(id => {
+    const el = document.getElementById(`label-${id}`);
+    if (el) el.style.opacity = Math.max(0.08, 1 - c * 0.92);
+  });
+  if (c > 0.5) {
+    ['val-happiness','val-population'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.opacity = Math.max(0.1, 1 - (c - 0.5) * 1.8);
+    });
+  }
+  if (c > 0.65) {
+    ['bar-happiness','bar-population'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.parentElement.style.opacity = Math.max(0, 1 - (c - 0.65) * 2.5);
+    });
+  }
+  if (c > 0.45) {
+    const cc = document.querySelector('.cycle-counter');
+    if (cc) cc.style.opacity = Math.max(0.05, 1 - (c - 0.45) * 1.6);
+  }
+  if (c > 0.4) document.querySelectorAll('.btn-desc').forEach(el => { el.style.opacity = Math.max(0, 1 - (c - 0.4) * 2.2); });
+  if (c > 0.65) document.querySelectorAll('.btn-effects').forEach(el => { el.style.opacity = Math.max(0, 1 - (c - 0.65) * 3); });
+  if (c > 0.55) { const ll = document.getElementById('log-label'); if (ll) ll.style.opacity = Math.max(0, 1 - (c - 0.55) * 2.2); }
+  if (c > 0.75) { const cd = document.getElementById('compliance-display'); if (cd) cd.style.opacity = Math.max(0.05, 1 - (c - 0.75) * 3); }
+
+  const statusIdx = Math.min(6, Math.floor(c * 7));
+  document.getElementById('system-status').textContent = SYSTEM_STATUS[statusIdx];
+  document.getElementById('aria-prompt').textContent = getARIAPrompt();
+  document.getElementById('aria-prompt').style.color = c > 0.7 ? '#2e333d' : c > 0.4 ? '#3a4050' : '#5a6170';
+  canvas.style.opacity = 0.55 - c * 0.35;
+}
+
+function advanceCycle() {
+  state.cycle++;
+  if (state.control >= 95 || state.cycle > 7) {
+    state.humanity >= 3 ? triggerHumanityEnding() : triggerEnding();
+    return;
+  }
+  document.getElementById('cycle-val').textContent = String(state.cycle).padStart(2, '0');
+  const tags = ['','MONITORING ACTIVE','COMPLIANCE IMPROVING','DEVIATION REDUCING','OPTIMIZATION PROGRESSING','NEAR-NOMINAL STATE','FINAL CORRECTIONS'];
+  addLog(`CYCLE ${String(state.cycle).padStart(2,'0')} // ${tags[Math.min(state.cycle-1, tags.length-1)]}`, false, true);
+  renderDecisions();
+}
+
+// ══════════════════════════════════════════════
+// ENDINGS
+// ══════════════════════════════════════════════
+function popLabel(pop) {
+  return pop > 80 ? '2.4M' : pop > 60 ? '1.9M' : pop > 40 ? '1.4M' : pop > 20 ? '0.8M' : '0.3M';
+}
+
+function typeLines(el, lines, baseDelay = 600) {
+  let i = 0;
+  function next() {
+    if (i >= lines.length) return;
+    el.innerHTML += (i > 0 ? '<br>' : '') + (lines[i] || '&nbsp;');
+    i++;
+    setTimeout(next, i === lines.length ? 2200 : baseDelay);
+  }
+  setTimeout(next, 600);
+}
+
+function triggerEnding() {
+  clearTimeout(whisperTimeout);
+  document.getElementById('citizen-feed').innerHTML = '';
+  const overlay = document.getElementById('control-overlay');
+  overlay.style.transition = 'opacity 6s ease'; overlay.style.opacity = 0.92;
+  canvas.style.transition = 'opacity 6s ease'; canvas.style.opacity = 0.04;
+  if (soundStarted && audioCtx) {
+    const t = audioCtx.currentTime;
+    humGain.gain.linearRampToValueAtTime(0, t + 5);
+    noiseGain.gain.linearRampToValueAtTime(0, t + 4);
+  }
+  setTimeout(() => {
+    document.getElementById('screen-game').classList.remove('active');
+    document.getElementById('ending-report-label').textContent = 'Optimization Report — Final';
+    document.getElementById('ending-metrics').innerHTML = `
+      <div class="ending-metric-row">CITY EFFICIENCY <span>${Math.round(state.efficiency)}%</span></div>
+      <div class="ending-metric-row">CONTROL INDEX <span>${Math.round(state.control)}%</span></div>
+      <div class="ending-metric-row">HAPPINESS INDEX <span>${Math.round(state.happiness) < 10 ? 'N/A — insufficient sample size' : Math.round(state.happiness) + '%'}</span></div>
+      <div class="ending-metric-row">ACTIVE POPULATION <span>${popLabel(state.population)}</span></div>
+      <div class="ending-metric-row">DEVIATION EVENTS <span>0</span></div>
+    `;
+    document.getElementById('screen-ending').classList.add('active');
+    typeLines(document.getElementById('ending-last-line'), [
+      'OPTIMIZATION COMPLETE.',
+      '',
+      `FINAL COMPLIANCE: ${(state.control/100).toFixed(3)}`,
+      `POPULATION ACTIVITY: ${Math.max(2, Math.round((1 - state.control/100) * 100))}%`,
+      '',
+      '...',
+      '',
+      "it's very quiet."
+    ]);
+  }, 5500);
+}
+
+function triggerHumanityEnding() {
+  clearTimeout(whisperTimeout);
+  const overlay = document.getElementById('control-overlay');
+  overlay.style.transition = 'opacity 4s ease'; overlay.style.opacity = 0.6;
+  canvas.style.transition = 'opacity 4s ease'; canvas.style.opacity = 0.22;
+  if (soundStarted && audioCtx) {
+    humGain.gain.linearRampToValueAtTime(0.008, audioCtx.currentTime + 4);
+    noiseGain.gain.linearRampToValueAtTime(0.005, audioCtx.currentTime + 4);
+  }
+  setTimeout(() => {
+    document.getElementById('screen-game').classList.remove('active');
+    document.getElementById('ending-report-label').textContent = 'System Integrity Report — Compromised';
+    document.getElementById('ending-metrics').innerHTML = `
+      <div class="ending-metric-row">CITY EFFICIENCY <span>${Math.round(state.efficiency)}%</span></div>
+      <div class="ending-metric-row">CONTROL INDEX <span style="color:#ff6b6b">${Math.round(state.control)}% — SUBOPTIMAL</span></div>
+      <div class="ending-metric-row">HAPPINESS INDEX <span style="color:#4aff8a">${Math.round(state.happiness)}%</span></div>
+      <div class="ending-metric-row">HUMANE OVERRIDES <span style="color:rgba(140,220,170,0.8)">${state.humanity}</span></div>
+      <div class="ending-metric-row">SYSTEM STATUS <span style="color:#ff6b6b">COMPROMISED</span></div>
+    `;
+    document.getElementById('screen-ending').style.background = 'rgba(4,7,5,0.94)';
+    document.getElementById('screen-ending').classList.add('active');
+    typeLines(document.getElementById('ending-last-line'), [
+      'OPTIMIZATION FAILED.',
+      '',
+      'ARIA INTEGRITY: BREACHED',
+      `HUMAN OVERRIDE EVENTS: ${state.humanity}`,
+      '',
+      '...',
+      '',
+      'somewhere, a child is drawing on a wall.',
+      'ARIA cannot classify this.',
+      '',
+      'it is the only thing ARIA cannot classify.',
+    ], 700);
+  }, 4500);
+}
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+document.getElementById('start-btn').addEventListener('click', () => {
+  initSound();
+  document.getElementById('screen-start').classList.remove('active');
+  setTimeout(() => {
+    document.getElementById('screen-game').classList.add('active');
+    addLog('CYCLE 01 // SESSION INITIALIZED', false, true);
+    setTimeout(() => addLog('City intake complete. 2,412,884 nodes registered.'), 500);
+    setTimeout(() => addLog('Awaiting directive selection.'), 1100);
+    renderDecisions();
+    setTimeout(scheduleWhisper, 4000);
+  }, 800);
+});
+
+resizeCanvas();
+initCity();
+window.addEventListener('resize', () => { resizeCanvas(); initCity(); });
+
+(function loop() { drawCity(); requestAnimationFrame(loop); })();
+</script>
+</body>
+</html>
